@@ -1,0 +1,38 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "wadinisafe-5475f",
+          "appId": "1:507452744050:android:a1075d58a1ee594044fdeb",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "wadinisafe-5475f",
+          "configurations": {
+            "android": "1:507452744050:android:a1075d58a1ee594044fdeb",
+            "ios": "1:507452744050:ios:624ae064d979f99c44fdeb"
+          }
+        }
+      }
+    }
+  }
+}

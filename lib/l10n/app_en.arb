@@ -1,0 +1,10 @@
+{
+  "@@locale": "en",
+  "appTitle": "WadiniSafe",
+  "poweredBy": "Powered by Proc0de",
+  "signIn": "Sign In",
+  "welcome": "Welcome",
+  "driver": "Driver",
+  "client": "Client",
+  "admin": "Admin"
+}

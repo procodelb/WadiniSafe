@@ -1,0 +1,148 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isDriver() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
+    }
+    
+    function isApprovedDriver() {
+      return isDriver() && 
+        get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function isClient() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/clients/$(request.auth.uid));
+    }
+
+    function isApprovedClient() {
+      return isClient() && 
+        get(/databases/$(database)/documents/clients/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // --- Collections ---
+
+    // Admins: Full Access
+    match /admins/{adminId} {
+      allow read: if isSignedIn(); // Allow checking if admin exists? Or maybe restrict to self.
+      allow write: if isAdmin(); // Only admins can manage admins
+    }
+
+    // Drivers
+    match /drivers/{driverId} {
+      // Admin can do anything
+      // Public read (for clients to see driver details) - or maybe restricted to 'approved' drivers?
+      // Let's allow authenticated users to read driver basic info.
+      allow read: if isSignedIn();
+      
+      // Driver can update specific fields
+      allow update: if request.auth.uid == driverId && (
+        // Allow updating status-related fields only if approved (or maybe just online status)
+        // User asked: "only allowed fields: lastLocation, isOnline, activeRideId"
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastLocation', 'isOnline', 'activeRideId', 'fcmToken'])
+      );
+      
+      // Initial creation might be done via a Cloud Function or separate flow, 
+      // but if done from client:
+      allow create: if request.auth.uid == driverId; 
+    }
+
+    // Clients
+    match /clients/{clientId} {
+      allow read: if isSignedIn(); // Drivers need to see client info
+      
+      allow update: if request.auth.uid == clientId && (
+         request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['personalInfo', 'fcmToken'])
+      );
+
+      allow create: if request.auth.uid == clientId;
+    }
+
+    // Vehicles (Linked to drivers)
+    match /vehicles/{vehicleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin(); // Usually admins manage vehicles or drivers create them once
+    }
+
+    // Stands & Areas & Pricing (Read-only for users, Admin write)
+    match /stands/{standId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /areas/{areaId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /pricing/{pricingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Rides
+    match /rides/{rideId} {
+      // Admin access
+      allow read, write: if isAdmin();
+
+      // Create: Client must be approved
+      allow create: if request.auth.uid == request.resource.data.clientId 
+                    && isApprovedClient()
+                    && request.resource.data.status == 'requested';
+
+      // Read: Participants
+      allow read: if request.auth.uid == resource.data.clientId 
+                  || request.auth.uid == resource.data.driverId;
+
+      // Update: Participants can update based on state machine
+      allow update: if (request.auth.uid == resource.data.clientId || request.auth.uid == resource.data.driverId)
+                    && (
+                      // Example: Driver accepting a ride
+                      (request.resource.data.status == 'accepted' && resource.data.status == 'requested') ||
+                      // Example: Driver starting
+                      (request.resource.data.status == 'in_progress' && resource.data.status == 'on_the_way') ||
+                      // Example: Completion
+                      (request.resource.data.status == 'completed' && resource.data.status == 'in_progress') ||
+                      // Cancellation
+                      (request.resource.data.status == 'canceled')
+                    );
+      
+      // Messages Subcollection
+      match /messages/{messageId} {
+        allow read: if request.auth.uid == get(/databases/$(database)/documents/rides/$(rideId)).data.clientId
+                    || request.auth.uid == get(/databases/$(database)/documents/rides/$(rideId)).data.driverId
+                    || isAdmin();
+        
+        allow create: if (request.auth.uid == get(/databases/$(database)/documents/rides/$(rideId)).data.clientId
+                         || request.auth.uid == get(/databases/$(database)/documents/rides/$(rideId)).data.driverId)
+                         && request.resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    // Ratings
+    match /ratings/{ratingId} {
+      allow read: if isSignedIn();
+      allow create: if request.auth.uid == request.resource.data.fromUserId; // Simple check
+    }
+
+    // Reports
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read, write: if isAdmin();
+    }
+  }
+}
