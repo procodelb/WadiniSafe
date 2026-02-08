@@ -36,6 +36,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   void _onOtpSubmit() {
     final otp = _otpController.text.trim();
     if (otp.isNotEmpty) {
+      print("otp is:" + otp);
       ref.read(authControllerProvider.notifier).verifyOtp(context, otp);
     }
   }

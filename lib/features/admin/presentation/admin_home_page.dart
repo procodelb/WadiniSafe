@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'approvals_tab.dart';
+import 'pricing_tab.dart';
+import 'stands_tab.dart';
 
 class AdminHomePage extends ConsumerWidget {
   const AdminHomePage({super.key});
@@ -29,8 +31,8 @@ class AdminHomePage extends ConsumerWidget {
           children: [
             ApprovalsTab(),
             Center(child: Text('Live Map (Coming Soon)')),
-            Center(child: Text('Pricing (Coming Soon)')),
-            Center(child: Text('Stands (Coming Soon)')),
+            PricingTab(),
+            StandsTab(),
             Center(child: Text('Reports (Coming Soon)')),
             Center(child: Text('Users (Coming Soon)')),
             Center(child: Text('Chats (Coming Soon)')),

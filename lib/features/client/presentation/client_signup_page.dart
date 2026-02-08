@@ -58,12 +58,24 @@ class _ClientSignupPageState extends ConsumerState<ClientSignupPage> {
 
   Future<String?> _uploadImage(File file, String path) async {
     try {
+      print('Uploading image to: $path');
+      if (!file.existsSync()) {
+        print('File does not exist: ${file.path}');
+        return null;
+      }
+      print('File size: ${file.lengthSync()} bytes');
       final ref = FirebaseStorage.instance.ref().child(path);
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      return await snapshot.ref.getDownloadURL();
+      final uploadTask =
+          ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      uploadTask.snapshotEvents.listen((event) {
+        print('Upload progress: ${event.bytesTransferred}/${event.totalBytes}');
+      });
+      final snapshot = await uploadTask.timeout(const Duration(seconds: 30));
+      final url = await snapshot.ref.getDownloadURL();
+      print('Upload successful: $url');
+      return url;
     } catch (e) {
-      debugPrint('Error uploading image: $e');
+      print('Error uploading image: $e');
       return null;
     }
   }
@@ -78,17 +90,21 @@ class _ClientSignupPageState extends ConsumerState<ClientSignupPage> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    // setState(() => _isLoading = true);
 
     try {
+      print("U=========================================");
       final user = FirebaseAuth.instance.currentUser;
+      print(user);
       if (user == null) throw Exception("User not authenticated");
 
       // 1. Upload Images
       final frontUrl = await _uploadImage(
           _idFrontImage!, 'client_ids/${user.uid}/front.jpg');
+      print(frontUrl);
       final backUrl =
           await _uploadImage(_idBackImage!, 'client_ids/${user.uid}/back.jpg');
+      print(backUrl);
 
       if (frontUrl == null || backUrl == null) {
         throw Exception("Failed to upload ID images");
@@ -127,6 +143,7 @@ class _ClientSignupPageState extends ConsumerState<ClientSignupPage> {
 
       await batch.commit();
 
+      print("U=========================================");
       if (!mounted) return;
       context.go('/pending-approval');
     } catch (e) {
@@ -137,7 +154,7 @@ class _ClientSignupPageState extends ConsumerState<ClientSignupPage> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        // setState(() => _isLoading = false);
       }
     }
   }
@@ -282,6 +299,7 @@ class _ClientSignupPageState extends ConsumerState<ClientSignupPage> {
                   text: 'Submit for Verification',
                   isLoading: _isLoading,
                   onPressed: _isLoading ? null : _submitSignup,
+                  // onPressed: _submitSignup,
                 ),
               ],
             ),

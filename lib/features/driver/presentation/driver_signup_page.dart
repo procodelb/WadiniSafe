@@ -101,13 +101,30 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
 
   Future<String?> _uploadImage(File file, String path) async {
     try {
+      print("Starting upload of $path");
+      if (!file.existsSync()) {
+        return null;
+      }
       final ref = FirebaseStorage.instance.ref().child(path);
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      return await snapshot.ref.getDownloadURL();
+      final uploadTask =
+          ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+
+      // Add timeout to prevent hanging
+      final snapshot = await uploadTask.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception("Upload timeout after 30 seconds");
+        },
+      );
+
+      print("Upload complete, getting download URL for $path");
+      final url = await snapshot.ref.getDownloadURL();
+      print("Download URL obtained: $url");
+      return url;
     } catch (e) {
       debugPrint('Error uploading image: $e');
-      return null;
+      print('ERROR uploading image to $path: $e');
+      rethrow;
     }
   }
 
@@ -127,22 +144,30 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    // setState(() => _isLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("User not authenticated");
 
       // Upload Images
+      print("start uploading license photo");
+      print(_licensePhoto);
+      print(_licensePhoto!);
+      print('driver_docs/${user.uid}/license.jpg');
       final licenseUrl = await _uploadImage(
           _licensePhoto!, 'driver_docs/${user.uid}/license.jpg');
+      print("License URL: $licenseUrl");
+      print("start uploading vehicle photo");
       final vehicleUrl = await _uploadImage(
           _vehiclePhoto!, 'driver_docs/${user.uid}/vehicle.jpg');
+      print("Vehicle URL: $vehicleUrl");
 
       if (licenseUrl == null || vehicleUrl == null) {
         throw Exception("Failed to upload documents");
       }
 
+      print("Both images uploaded, creating batch write");
       final batch = FirebaseFirestore.instance.batch();
 
       // Driver Document Reference
@@ -155,6 +180,7 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
 
       final now = FieldValue.serverTimestamp();
 
+      print("Setting driver data");
       // Set Driver Data
       batch.set(driverRef, {
         'uid': user.uid,
@@ -173,6 +199,7 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
         'createdAt': now,
       });
 
+      print("Setting vehicle data");
       // Set Vehicle Data
       batch.set(vehicleRef, {
         'id': vehicleRef.id,
@@ -184,6 +211,7 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
         'createdAt': now,
       });
 
+      print("Setting user data");
       // Update User Role Status (Optional redundancy but good for quick lookups)
       final userRef =
           FirebaseFirestore.instance.collection('users').doc(user.uid);
@@ -196,11 +224,15 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
           },
           SetOptions(merge: true));
 
+      print("Committing batch write");
       await batch.commit();
+      print("Batch write successful!");
 
       if (!mounted) return;
       context.go('/pending-approval');
-    } catch (e) {
+    } catch (e, st) {
+      print("ERROR in _submitApplication: $e");
+      print("STACK TRACE: $st");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
@@ -358,6 +390,7 @@ class _DriverSignupPageState extends ConsumerState<DriverSignupPage> {
                   text: 'Submit Application',
                   isLoading: _isLoading,
                   onPressed: _isLoading ? null : _submitApplication,
+                  // onPressed: _submitApplication,
                 ),
               ],
             ),

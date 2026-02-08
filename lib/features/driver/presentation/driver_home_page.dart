@@ -95,6 +95,8 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
     try {
       final position =
           await ref.read(locationServiceProvider).getCurrentPosition();
+      print("current position: ");
+      print(position);
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
       });
@@ -107,8 +109,11 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   void _toggleOnline(bool value) {
     setState(() => _isOnline = value);
     if (value) {
+      print("location: ");
+      print(value);
       ref.read(locationServiceProvider).startTracking(_driverId);
     } else {
+      print("location tracking stopped: ");
       ref.read(locationServiceProvider).stopTracking();
     }
   }
@@ -145,6 +150,12 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
   @override
   Widget build(BuildContext context) {
     // 1. Requests Stream (Only when online and no active ride)
+    print("==================");
+    print(_isOnline);
+    print(_activeRideId);
+    print(_currentLocation);
+    print("==================");
+
     final requestsStream =
         (_isOnline && _activeRideId == null && _currentLocation != null)
             ? ref.watch(rideRepositoryProvider).getNearbyRequests(
@@ -155,6 +166,8 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
                 )
             : const Stream<List<DocumentSnapshot>>.empty();
 
+    print("requestsStream: ");
+    print(requestsStream);
     // 2. Active Ride Stream
     final activeRideStream = _activeRideId != null
         ? ref.watch(rideRepositoryProvider).streamRide(_activeRideId!)
@@ -233,10 +246,14 @@ class _DriverHomePageState extends ConsumerState<DriverHomePage> {
               StreamBuilder<List<DocumentSnapshot>>(
                 stream: requestsStream,
                 builder: (context, snapshot) {
+                  print("all rides stream snapshot: ${snapshot.data}");
+                  print(snapshot);
                   if (!snapshot.hasData) return const SizedBox.shrink();
                   return MarkerLayer(
                     markers: snapshot.data!.map((doc) {
                       final data = doc.data() as Map<String, dynamic>;
+                      print("data: ");
+                      print(data);
                       final pickup = data['pickup'];
                       return Marker(
                         point: LatLng(pickup['lat'], pickup['lng']),

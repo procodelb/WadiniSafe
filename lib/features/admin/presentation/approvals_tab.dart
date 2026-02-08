@@ -150,6 +150,10 @@ class _UserApprovalTile extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.check, color: Colors.green),
                     onPressed: () {
+                      print("================================");
+                      print(user.uid);
+                      print(user.role);
+                      print("================================");
                       ref
                           .read(adminControllerProvider.notifier)
                           .approveUser(user.uid, user.role);

@@ -34,6 +34,7 @@ class _ClientHomePageState extends ConsumerState<ClientHomePage> {
   String _rideStatus =
       'idle'; // idle, selecting, requested, accepted, in_progress
   String? _activeRideId;
+  bool _hasShownCompletionDialog = false;
   String _clientId = 'test_client_1';
 
   // Filters
@@ -182,6 +183,7 @@ class _ClientHomePageState extends ConsumerState<ClientHomePage> {
         _rideStatus = 'requested';
         _activeRideId = rideId;
         _isLoading = false;
+        _hasShownCompletionDialog = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
@@ -214,7 +216,8 @@ class _ClientHomePageState extends ConsumerState<ClientHomePage> {
             // Handle completion
             if (status == 'completed') {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (_rideStatus != 'completed') {
+                if (!_hasShownCompletionDialog) {
+                  _hasShownCompletionDialog = true;
                   setState(() {
                     _rideStatus = 'idle';
                     _activeRideId = null;
@@ -335,6 +338,8 @@ class _ClientHomePageState extends ConsumerState<ClientHomePage> {
           StreamBuilder<List<DocumentSnapshot>>(
             stream: nearbyDriversStream,
             builder: (context, snapshot) {
+              print("========= drivers nerby ============");
+              print(snapshot);
               if (!snapshot.hasData) return const SizedBox.shrink();
               return MarkerLayer(
                 markers: snapshot.data!.map((doc) {

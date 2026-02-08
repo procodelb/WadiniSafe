@@ -11,6 +11,30 @@ class RideRepository {
 
   RideRepository(this._firestore);
 
+  // // 1.5 Migrate Rides: Add geopoint to existing rides without it
+  // Future<void> migrateRidesToIncludeGeopoint() async {
+  //   try {
+  //     final ridesSnapshot =
+  //         await _firestore.collection('rides').where('status', isEqualTo: 'requested').get();
+
+  //     for (final doc in ridesSnapshot.docs) {
+  //       final pickup = doc['pickup'] as Map<String, dynamic>?;
+  //       if (pickup != null && pickup['geopoint'] == null) {
+  //         final lat = pickup['lat'] as num?;
+  //         final lng = pickup['lng'] as num?;
+  //         if (lat != null && lng != null) {
+  //           await doc.reference.update({
+  //             'pickup.geopoint': GeoPoint(lat.toDouble(), lng.toDouble()),
+  //           });
+  //           print('Migrated ride ${doc.id} to include geopoint');
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     print('Error migrating rides: $e');
+  //   }
+  // }
+
   // 1. Create Ride Request
   Future<String> requestRide({
     required String clientId,
@@ -31,9 +55,10 @@ class RideRepository {
       'status': 'requested',
       'vehicleType': vehicleType,
       'pickup': {
+        'geopoint': GeoPoint(pickupLat, pickupLng),
+        'geohash': pickupPoint.hash,
         'lat': pickupLat,
         'lng': pickupLng,
-        'geohash': pickupPoint.hash,
         'address': pickupAddress,
       },
       'dropoff': {
@@ -50,6 +75,7 @@ class RideRepository {
 
   // 2. Listen to Available Rides (For Drivers)
   // Query rides with status 'requested' near driver
+  // Note: vehicleType filtering is done client-side to avoid composite index requirement
   Stream<List<DocumentSnapshot>> getNearbyRequests({
     required double lat,
     required double lng,
@@ -61,30 +87,36 @@ class RideRepository {
     Query collectionRef =
         _firestore.collection('rides').where('status', isEqualTo: 'requested');
 
-    if (vehicleType != null) {
-      // Assuming rides store vehicleType preference. If null, any vehicle type is allowed.
-      // But typically, a client requests a SPECIFIC vehicle type.
-      // So we should match the ride's requested vehicleType with the driver's vehicleType.
-      // However, Firestore "where" clauses can be restrictive with GeoFlutterFire.
-      // GeoFlutterFire uses geohashes and range queries. Adding another inequality filter might be tricky if not careful,
-      // but 'isEqualTo' is usually fine.
-
-      // WAIT: If the client requests a specific vehicle type, the RIDE document should have it.
-      // And we filter rides where ride.vehicleType == driver.vehicleType.
-
-      // Let's assume requestRide saves 'vehicleType'.
-      // I need to check requestRide again.
-
-      collectionRef =
-          collectionRef.where('vehicleType', isEqualTo: vehicleType);
-    }
-
-    return geo.collection(collectionRef: collectionRef).within(
+    return geo
+        .collection(collectionRef: collectionRef)
+        .within(
           center: center,
           radius: radiusInKm,
           field: 'pickup',
-          strictMode: true,
-        );
+          strictMode: false,
+        )
+        .map((rides) {
+      // Pre-filter: exclude rides without valid geohash to prevent GeoFlutterFire parsing errors
+      final validRides = rides.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final pickup = data?['pickup'] as Map<String, dynamic>?;
+        final geohash = pickup?['geohash'];
+        return geohash != null && geohash is String;
+      }).toList();
+
+      // Client-side filter by vehicleType if provided
+      if (vehicleType != null && vehicleType.isNotEmpty) {
+        return validRides.where((doc) {
+          final data = doc.data() as Map<String, dynamic>?;
+          final rideVehicleType = data?['vehicleType'] as String?;
+          return rideVehicleType == vehicleType;
+        }).toList();
+      }
+      return validRides;
+    }).handleError((error) {
+      print('Error querying nearby rides: $error');
+      return <DocumentSnapshot>[];
+    });
   }
 
   // 3. Accept Ride

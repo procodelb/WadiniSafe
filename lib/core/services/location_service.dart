@@ -17,15 +17,33 @@ class LocationService {
 
   LocationService(this._mapRepository);
 
+  // Future<bool> requestPermission() async {
+  //   final status = await Geolocator.checkPermission();
+
+  //   if (status == LocationPermission.denied) {
+  //     final result = await Geolocator.requestPermission();
+  //     return result == LocationPermission.always ||
+  //         result == LocationPermission.whileInUse;
+  //   }
+
+  //   return status == LocationPermission.always ||
+  //       status == LocationPermission.whileInUse;
+  // }
+
   Future<bool> requestPermission() async {
-    final status = await Geolocator.checkPermission();
-    if (status == LocationPermission.denied) {
-      final result = await Geolocator.requestPermission();
-      return result == LocationPermission.always ||
-          result == LocationPermission.whileInUse;
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
-    return status == LocationPermission.always ||
-        status == LocationPermission.whileInUse;
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      print("Location permission denied");
+      return false;
+    }
+
+    return true;
   }
 
   Future<Position> getCurrentPosition() async {
