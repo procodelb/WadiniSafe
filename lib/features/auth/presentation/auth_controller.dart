@@ -98,17 +98,21 @@ class AuthController extends StateNotifier<AuthState> {
       await _handleSuccessfulAuth(context, userCredential.user);
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print("Error: $e");
+      print("StackTrace: $stackTrace");
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
   Future<void> _handleSuccessfulAuth(
       BuildContext context, User? firebaseUser) async {
+    print("S========================================");
     if (firebaseUser == null) {
       state = state.copyWith(isLoading: false, error: "Authentication failed");
       return;
     }
+    print("S========================================");
 
     try {
       // 1. Get User Profile (from any collection)

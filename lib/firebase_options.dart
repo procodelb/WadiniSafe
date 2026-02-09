@@ -54,7 +54,8 @@ class DefaultFirebaseOptions {
     appId: '1:507452744050:android:a1075d58a1ee594044fdeb',
     messagingSenderId: '507452744050',
     projectId: 'wadinisafe-5475f',
-    storageBucket: 'wadinisafe-5475f.firebasestorage.app',
+    // Use the appspot storage bucket (standard Firebase Storage domain)
+    storageBucket: 'wadinisafe-5475f.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -62,9 +63,12 @@ class DefaultFirebaseOptions {
     appId: '1:507452744050:ios:624ae064d979f99c44fdeb',
     messagingSenderId: '507452744050',
     projectId: 'wadinisafe-5475f',
-    storageBucket: 'wadinisafe-5475f.firebasestorage.app',
-    androidClientId: '507452744050-jstepm5p0eq0pcsv8ottmv2k7g2jn9nv.apps.googleusercontent.com',
-    iosClientId: '507452744050-8laa7pre9rk7aem7huhje9mg3jthhvou.apps.googleusercontent.com',
+    // Use the appspot storage bucket (standard Firebase Storage domain)
+    storageBucket: 'wadinisafe-5475f.appspot.com',
+    androidClientId:
+        '507452744050-jstepm5p0eq0pcsv8ottmv2k7g2jn9nv.apps.googleusercontent.com',
+    iosClientId:
+        '507452744050-8laa7pre9rk7aem7huhje9mg3jthhvou.apps.googleusercontent.com',
     iosBundleId: 'com.example.wadinisafe',
   );
 }

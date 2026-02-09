@@ -42,6 +42,13 @@ service cloud.firestore {
       allow write: if isAdmin(); // Only admins can manage admins
     }
 
+    // Users (Fallback for incomplete signups)
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      // Allow owner or admins to write user documents
+      allow write: if request.auth.uid == userId || isAdmin();
+    }
+
     // Drivers
     match /drivers/{driverId} {
       // Admin can do anything
@@ -49,35 +56,46 @@ service cloud.firestore {
       // Let's allow authenticated users to read driver basic info.
       allow read: if isSignedIn();
       
-      // Driver can update specific fields
-      allow update: if request.auth.uid == driverId && (
-        // Allow updating status-related fields only if approved (or maybe just online status)
-        // User asked: "only allowed fields: lastLocation, isOnline, activeRideId"
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['lastLocation', 'isOnline', 'activeRideId', 'fcmToken'])
-      );
+      // Driver can create their own profile during signup
+      allow create: if request.auth.uid == driverId;
       
-      // Initial creation might be done via a Cloud Function or separate flow, 
-      // but if done from client:
-      allow create: if request.auth.uid == driverId; 
+      // Driver can update specific fields, or admins can update any driver doc (for approvals)
+      // Allow top-level 'updatedAt' as well to support client-side online toggles
+      // that set a last-modified timestamp.
+      // Also allow any signed-in user to update rating fields
+      allow update: if isAdmin() || (request.auth.uid == driverId && (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastLocation', 'isOnline', 'activeRideId', 'fcmToken', 'updatedAt'])
+      )) || (isSignedIn() && (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['ratingAvg', 'ratingCount'])
+      ));
     }
 
     // Clients
     match /clients/{clientId} {
       allow read: if isSignedIn(); // Drivers need to see client info
       
-      allow update: if request.auth.uid == clientId && (
+      // Client can create their own profile during signup
+      allow create: if request.auth.uid == clientId;
+      
+      // Allow client to update limited fields, or admins to update (for approvals)
+      allow update: if isAdmin() || (request.auth.uid == clientId && (
          request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['personalInfo', 'fcmToken'])
-      );
-
-      allow create: if request.auth.uid == clientId;
+      )) || (isSignedIn() && (
+        // Allow any signed-in user to update rating fields on clients
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['ratingAvg', 'ratingCount'])
+      ))
     }
 
     // Vehicles (Linked to drivers)
     match /vehicles/{vehicleId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin(); // Usually admins manage vehicles or drivers create them once
+      // Drivers can create their own vehicles, admins can manage all
+      allow create: if request.auth.uid == request.resource.data.driverId;
+      allow write: if isAdmin();
     }
 
     // Stands & Areas & Pricing (Read-only for users, Admin write)
@@ -104,22 +122,13 @@ service cloud.firestore {
                     && isApprovedClient()
                     && request.resource.data.status == 'requested';
 
-      // Read: Participants
-      allow read: if request.auth.uid == resource.data.clientId 
-                  || request.auth.uid == resource.data.driverId;
+      // Read: Participants OR drivers discovering available requests
+      allow read: if (request.auth.uid == resource.data.clientId 
+                      || request.auth.uid == resource.data.driverId)
+                  || (isDriver() && resource.data.status == 'requested');
 
-      // Update: Participants can update based on state machine
-      allow update: if (request.auth.uid == resource.data.clientId || request.auth.uid == resource.data.driverId)
-                    && (
-                      // Example: Driver accepting a ride
-                      (request.resource.data.status == 'accepted' && resource.data.status == 'requested') ||
-                      // Example: Driver starting
-                      (request.resource.data.status == 'in_progress' && resource.data.status == 'on_the_way') ||
-                      // Example: Completion
-                      (request.resource.data.status == 'completed' && resource.data.status == 'in_progress') ||
-                      // Cancellation
-                      (request.resource.data.status == 'canceled')
-                    );
+      // Update: admins and drivers can update
+      allow update: if (isAdmin() || isDriver());
       
       // Messages Subcollection
       match /messages/{messageId} {
@@ -136,7 +145,7 @@ service cloud.firestore {
     // Ratings
     match /ratings/{ratingId} {
       allow read: if isSignedIn();
-      allow create: if request.auth.uid == request.resource.data.fromUserId; // Simple check
+      allow create: if isSignedIn();
     }
 
     // Reports

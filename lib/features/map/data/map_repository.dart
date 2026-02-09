@@ -31,13 +31,23 @@ class MapRepository {
 
     // Rating filtering must be done client-side because Firestore doesn't support
     // inequality on 'rating' AND range on 'geohash' in the same query.
-    Stream<List<DocumentSnapshot>> stream =
-        _geo.collection(collectionRef: collectionRef).within(
-              center: center,
-              radius: radiusInKm,
-              field: 'lastLocation',
-              strictMode: true,
-            );
+    Stream<List<DocumentSnapshot>> stream = _geo
+        .collection(collectionRef: collectionRef)
+        .within(
+          center: center,
+          radius: radiusInKm,
+          field: 'lastLocation',
+          strictMode: false, // tolerate missing/malformed entries
+        )
+        .map((list) {
+      // Filter out any docs that don't have a valid GeoPoint in lastLocation
+      return list.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final loc = data?['lastLocation'] as Map<String, dynamic>?;
+        final geopoint = loc?['geopoint'];
+        return geopoint != null && geopoint is GeoPoint;
+      }).toList();
+    });
 
     if (minRating != null) {
       stream = stream.map((list) {
@@ -60,6 +70,30 @@ class MapRepository {
     });
   }
 
+  // Migration helper: backfill GeoPoint into existing driver docs
+  // Run once to add 'lastLocation.geopoint' for legacy documents
+  Future<void> migrateDriversAddGeopoint() async {
+    try {
+      final snapshot = await _firestore.collection('drivers').get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final lastLocation = data['lastLocation'] as Map<String, dynamic>?;
+        if (lastLocation != null && lastLocation['geopoint'] == null) {
+          final lat = lastLocation['lat'] as num?;
+          final lng = lastLocation['lng'] as num?;
+          if (lat != null && lng != null) {
+            await doc.reference.update({
+              'lastLocation.geopoint': GeoPoint(lat.toDouble(), lng.toDouble()),
+            });
+            print('Migrated driver ${doc.id} geopoint');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error migrating drivers: $e');
+    }
+  }
+
   // 2. Update Driver Location (Throttled call usually happens in Service, but this is the raw write)
   Future<void> updateDriverLocation({
     required String driverId,
@@ -72,6 +106,8 @@ class MapRepository {
 
     await _firestore.collection('drivers').doc(driverId).update({
       'lastLocation': {
+        // native GeoPoint required by GeoFlutterFire internals
+        'geopoint': GeoPoint(lat, lng),
         'geohash': geoFirePoint.hash,
         'lat': lat,
         'lng': lng,

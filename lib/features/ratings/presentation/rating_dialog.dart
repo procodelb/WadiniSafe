@@ -37,6 +37,18 @@ class _RatingDialogState extends ConsumerState<RatingDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      print("rideId: ");
+      print(widget.rideId);
+      print("fromUserId: ");
+      print(widget.currentUserId);
+      print("toUserId: ");
+      print(widget.targetUserId);
+      print("rating: ");
+      print(_rating);
+      print("userRole: ");
+      print(widget.targetUserRole);
+      print("comment: ");
+      print(_commentController.text.trim());
       await ref.read(ratingRepositoryProvider).submitRating(
             rideId: widget.rideId,
             fromUserId: widget.currentUserId,
@@ -48,6 +60,7 @@ class _RatingDialogState extends ConsumerState<RatingDialog> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
+        print("Error submitting rating: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
